@@ -60,7 +60,7 @@ var YK=["国士無双","国士無双十三面","四暗刻","四暗刻単騎","�
 var FTS=[["ym","役満の記録（入力画面）"],["hall","役満殿堂"],["show","精算の発表（音楽と読み上げ）"],["hl","精算のハイライト"],["titles","称号"],["graph","成績の推移グラフ"],["rel","対戦相性表"],["mvp","月間・年間MVP／ブービー"],["se","効果音・ファンファーレ"]];
 function boot(){
 if(PASS&&localStorage.getItem("mjp")!==PASS){var pv0=prompt("合言葉を入力してください");if(pv0!==PASS){app.textContent="合言葉が違います。再読み込みしてください。";return}localStorage.setItem("mjp",pv0)}
-var DEF={players:[],games:[],sess:{},settings:{start:25000,ret:30000,uma:[20,10,-10,-20],rate:0,chipRate:0,gr:1,round:"gosha",ft:{ym:true,hall:true,show:true,hl:true,titles:true,graph:true,rel:true,mvp:true,se:true}},meta:{lastBackup:null}};
+var DEF={players:[],games:[],sess:{},settings:{start:25000,ret:30000,uma:[20,10,-10,-20],rate:0,chipRate:0,gr:1,round:"gosha",yomi:"",ft:{ym:true,hall:true,show:true,hl:true,titles:true,graph:true,rel:true,mvp:true,se:true}},meta:{lastBackup:null}};
 var cl=o=>JSON.parse(JSON.stringify(o));
 var S=cl(DEF),ui={tab:"input",sub:"hall",ptype:"all",pval:"",seat:"",sk:"pt",sd:-1,edit:null,dr:null,undo:null,exp:null,sid:null,busy:false,annText:"",annSid:null};
 var local=FB.apiKey.indexOf("YOUR")==0,ref=null,dirty=0;
@@ -84,7 +84,13 @@ var pick=a=>a[Math.floor(Math.random()*a.length)];
 var AC=null,FAN=[[523,.14],[523,.14],[523,.14],[659,.18],[784,.18],[1047,.55]],BLIP=[[880,.07],[1175,.09]],JING=[[523,.16],[659,.16],[784,.16],[1047,.28],[784,.12],[1047,.5]];
 function play(notes){if(!S.settings.ft.se)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state=="suspended")AC.resume();var t=AC.currentTime+.02;
  notes.forEach(n=>{var o=AC.createOscillator(),gn=AC.createGain();o.type="triangle";o.frequency.value=n[0];gn.gain.setValueAtTime(.0001,t);gn.gain.exponentialRampToValueAtTime(.25,t+.02);gn.gain.exponentialRampToValueAtTime(.0001,t+n[1]);o.connect(gn);gn.connect(AC.destination);o.start(t);o.stop(t+n[1]+.05);t+=n[1]*.9})}catch(e){}}
-function speak(text){try{var s=window.speechSynthesis;if(!s)return;s.cancel();var u=new SpeechSynthesisUtterance(text);u.lang="ja-JP";var v=s.getVoices().filter(x=>/^ja/i.test(x.lang))[0];if(v)u.voice=v;u.rate=.95;s.speak(u)}catch(e){}}
+var YOMI={"国士無双十三面":"コクシムソウジュウサンメン","国士無双":"コクシムソウ","四暗刻単騎":"スーアンコータンキ","四暗刻":"スーアンコー","大三元":"ダイサンゲン","小四喜":"ショースーシー","大四喜":"ダイスーシー","字一色":"ツーイーソー","緑一色":"リューイーソー","清老頭":"チンロートー","純正九蓮宝燈":"ジュンセイチューレンポートー","九蓮宝燈":"チューレンポートー","四槓子":"スーカンツ","天和":"テンホー","地和":"チーホー","数え役満":"カゾエヤクマン",
+"半荘":"ハンチャン","役満":"ヤクマン","結果発表":"ケッカハッピョウ","発表":"ハッピョウ","結果":"ケッカ","精算":"セイサン","時間":"ジカン","本日":"ホンジツ","今日":"キョウ","一日":"イチニチ","全":"ゼン","お疲れさま":"おつかれさま","最高得点":"サイコウトクテン","得点":"トクテン","一方":"イッポー","次":"ツギ","巻き返し":"まきかえし","大勝利":"ダイショーリ","お見事":"おみごと","平和":"ヘイワ","伝説":"デンセツ","遊び":"あそび","対局":"タイキョク","会い":"あい","出ない":"でない","出ました":"でました"};
+var YKEYS=Object.keys(YOMI).sort((a,b)=>b.length-a.length);
+/* 読み上げ専用：画面の表示は漢字のまま、声に出すときだけかなに置き換える（設定の「言葉=読み」が優先） */
+function yomi(t){var L=(S.settings.yomi||"").split("\n").map(l=>l.split("=")).filter(p=>p.length==2&&p[0].trim()).map(p=>[p[0].trim(),p[1].trim()]).sort((a,b)=>b[0].length-a[0].length);
+ L.concat(YKEYS.map(k=>[k,YOMI[k]])).forEach(p=>{t=t.split(p[0]).join(p[1])});return t}
+function speak(text){try{var s=window.speechSynthesis;if(!s)return;s.cancel();var u=new SpeechSynthesisUtterance(yomi(text));u.lang="ja-JP";var v=s.getVoices().filter(x=>/^ja/i.test(x.lang))[0];if(v)u.voice=v;u.rate=.95;s.speak(u)}catch(e){}}
 
 function fixSid(){var pv=null;S.games.slice().sort(cmpA).forEach(g=>{if(!g.sid)g.sid=(pv&&ts(g.date,g.time)-ts(pv.date,pv.time)<GAP)?pv.sid:"s"+g.id;pv=g})}
 function merge(d){var ds=d.settings||{};S=Object.assign(cl(DEF),d,{settings:Object.assign({},DEF.settings,ds,{ft:Object.assign({},DEF.settings.ft,ds.ft||{})}),meta:Object.assign({},DEF.meta,d.meta||{}),sess:d.sess||{}});fixSid()}
@@ -315,6 +321,7 @@ function vSet(){
  <label>ポイント端数処理<select data-s="round"><option value="gosha"${s.round=="gosha"?" selected":""}>五捨六入</option><option value="shisha"${s.round=="shisha"?" selected":""}>四捨五入</option></select></label></div>
  <p class="sub">持ち点・返し点は通常の点数（25000など）で入力。1位のポイントは他3人の合計の逆数で自動計算（オカ込み）。変更しても過去の記録は再計算されません。</p></div>
  <div class="card"><h3>機能のオン/オフ</h3><p class="sub">オフにしても記録は消えません。オンに戻すと元どおり表示されます。</p>${FTS.map(x=>`<label class="ft"><input type="checkbox" data-ft="${x[0]}"${s.ft[x[0]]?" checked":""}>${x[1]}</label>`).join("")}</div>
+ <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button></div>
  <div class="card"><h3>バックアップ</h3><p class="sub">最終: ${S.meta.lastBackup||"なし"}　／　保存先: ${local?"この端末のみ":"Firebase"}</p>
  <button class="btn" data-a="exj">JSONで書き出し（復元用）</button><button class="btn s" data-a="exc">CSVで書き出し（Excel用）</button><button class="btn s" data-a="imp">JSONを読み込み（復元）</button><input type="file" id="fi" accept=".json,application/json" data-imp="1" hidden></div>
  <div class="card"><h3>データ管理</h3><p class="sub">対局の記録とチップ記録をすべて消します（メンバーは残ります）。先にバックアップを取ってください。</p><button class="btn d" data-a="wipe">全記録を削除</button></div>`}
@@ -346,6 +353,7 @@ app.addEventListener("input",e=>{var k=e.target.dataset.f;if(!k)return;var d=dra
 app.addEventListener("change",e=>{var t=e.target,d=t.dataset;
  if(d.s){var k=d.s;if(k[0]=="u"&&k.length==2)S.settings.uma[+k[1]]=+t.value;else S.settings[k]=k=="round"?t.value:+t.value;save()}
  if(d.ft){S.settings.ft[d.ft]=t.checked;save()}
+ if(d.t2!==undefined){S.settings[d.t2]=t.value;save()}
  if(d.g){ui[d.g]=t.value;if(d.g=="ptype")ui.pval="";render()}
  if(d.y){var pr=d.y.split(":"),y=draft().ym[+pr[0]],fk=pr[1];
   if(fk=="w")y.w=+t.value;else if(fk=="f")y.f=t.value===""?"":+t.value;else{y[fk]=t.value;if(fk=="t"&&t.value=="ツモ")y.f=""}render()}
@@ -404,6 +412,7 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
   ss2.forEach(s=>{s.gs.forEach((g,gi)=>g.ps.forEach((x,z)=>{L.push([g.date,g.time||"",s.sd,gi+1,WN[z],'"'+nm(x.p).replace(/"/g,'""')+'"',x.rank,x.s,x.pt,'"'+(g.ym||[]).filter(y=>y.w==x.p).map(y=>y.k).join("/")+'"'].join(","))}));
    settle(s).rows.forEach(r=>{C.push([s.sd,'"'+nm(r.id).replace(/"/g,'""')+'"',r.c==null?"":r.c].join(","))})});
   dl("mahjong_"+today()+".csv","\ufeff"+L.concat(C).join("\r\n"),"text/csv");await backed()}
+ else if(a=="ytest"){speak("半荘と役満の読みテストです。国士無双。大三元。四暗刻。精算の発表を始めます。")}
  else if(a=="cx"){ui.exp=null;render()}
  else if(a=="imp")document.getElementById("fi").click()});
 
