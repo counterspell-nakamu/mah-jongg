@@ -95,7 +95,7 @@ function speak(text){try{var s=window.speechSynthesis;if(!s)return;s.cancel();va
 function fixSid(){var pv=null;S.games.slice().sort(cmpA).forEach(g=>{if(!g.sid)g.sid=(pv&&ts(g.date,g.time)-ts(pv.date,pv.time)<GAP)?pv.sid:"s"+g.id;pv=g})}
 function merge(d){var ds=d.settings||{};S=Object.assign(cl(DEF),d,{settings:Object.assign({},DEF.settings,ds,{ft:Object.assign({},DEF.settings.ft,ds.ft||{})}),meta:Object.assign({},DEF.meta,d.meta||{}),sess:d.sess||{}});fixSid()}
 function keep(){try{if(ui.dr&&!ui.edit)localStorage.setItem("mjd",JSON.stringify(ui.dr))}catch(e){}}
-async function save(){render();var j=cl(S);dirty++;
+async function save(nr){if(!nr)render();var j=cl(S);dirty++;
  try{if(local)localStorage.setItem("mj",JSON.stringify(j));else await ref.set(j)}catch(e){alert("保存に失敗しました: "+e.message)}
  dirty--}
 
@@ -321,7 +321,7 @@ function vSet(){
  <label>ポイント端数処理<select data-s="round"><option value="gosha"${s.round=="gosha"?" selected":""}>五捨六入</option><option value="shisha"${s.round=="shisha"?" selected":""}>四捨五入</option></select></label></div>
  <p class="sub">持ち点・返し点は通常の点数（25000など）で入力。1位のポイントは他3人の合計の逆数で自動計算（オカ込み）。変更しても過去の記録は再計算されません。</p></div>
  <div class="card"><h3>機能のオン/オフ</h3><p class="sub">オフにしても記録は消えません。オンに戻すと元どおり表示されます。</p>${FTS.map(x=>`<label class="ft"><input type="checkbox" data-ft="${x[0]}"${s.ft[x[0]]?" checked":""}>${x[1]}</label>`).join("")}</div>
- <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button></div>
+ <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button><p class="sub" id="yT">上の欄に書いた言葉を、読みに直して読み上げます（何も書いていないときは見本を読みます）。</p></div>
  <div class="card"><h3>バックアップ</h3><p class="sub">最終: ${S.meta.lastBackup||"なし"}　／　保存先: ${local?"この端末のみ":"Firebase"}</p>
  <button class="btn" data-a="exj">JSONで書き出し（復元用）</button><button class="btn s" data-a="exc">CSVで書き出し（Excel用）</button><button class="btn s" data-a="imp">JSONを読み込み（復元）</button><input type="file" id="fi" accept=".json,application/json" data-imp="1" hidden></div>
  <div class="card"><h3>データ管理</h3><p class="sub">対局の記録とチップ記録をすべて消します（メンバーは残ります）。先にバックアップを取ってください。</p><button class="btn d" data-a="wipe">全記録を削除</button></div>`}
@@ -353,7 +353,7 @@ app.addEventListener("input",e=>{var k=e.target.dataset.f;if(!k)return;var d=dra
 app.addEventListener("change",e=>{var t=e.target,d=t.dataset;
  if(d.s){var k=d.s;if(k[0]=="u"&&k.length==2)S.settings.uma[+k[1]]=+t.value;else S.settings[k]=k=="round"?t.value:+t.value;save()}
  if(d.ft){S.settings.ft[d.ft]=t.checked;save()}
- if(d.t2!==undefined){S.settings[d.t2]=t.value;save()}
+ if(d.t2!==undefined){S.settings[d.t2]=t.value;save(true)}
  if(d.g){ui[d.g]=t.value;if(d.g=="ptype")ui.pval="";render()}
  if(d.y){var pr=d.y.split(":"),y=draft().ym[+pr[0]],fk=pr[1];
   if(fk=="w")y.w=+t.value;else if(fk=="f")y.f=t.value===""?"":+t.value;else{y[fk]=t.value;if(fk=="t"&&t.value=="ツモ")y.f=""}render()}
@@ -412,7 +412,9 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
   ss2.forEach(s=>{s.gs.forEach((g,gi)=>g.ps.forEach((x,z)=>{L.push([g.date,g.time||"",s.sd,gi+1,WN[z],'"'+nm(x.p).replace(/"/g,'""')+'"',x.rank,x.s,x.pt,'"'+(g.ym||[]).filter(y=>y.w==x.p).map(y=>y.k).join("/")+'"'].join(","))}));
    settle(s).rows.forEach(r=>{C.push([s.sd,'"'+nm(r.id).replace(/"/g,'""')+'"',r.c==null?"":r.c].join(","))})});
   dl("mahjong_"+today()+".csv","\ufeff"+L.concat(C).join("\r\n"),"text/csv");await backed()}
- else if(a=="ytest"){speak("半荘と役満の読みテストです。国士無双。大三元。四暗刻。精算の発表を始めます。")}
+ else if(a=="ytest"){var ta=q('[data-t2="yomi"]');if(ta)S.settings.yomi=ta.value;
+  var ws=(S.settings.yomi||"").split("\n").map(l=>l.split("=")[0].trim()).filter(Boolean),tx=ws.length?ws.join("。"):"半荘と役満の読みテストです。国士無双。大三元。";
+  var yt=document.getElementById("yT");if(yt)yt.textContent="読み上げ："+yomi(tx);speak(tx)}
  else if(a=="cx"){ui.exp=null;render()}
  else if(a=="imp")document.getElementById("fi").click()});
 
