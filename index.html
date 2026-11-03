@@ -88,7 +88,8 @@ var YOMI={"国士無双十三面":"コクシムソウジュウサンメン","国
 "半荘":"ハンチャン","役満":"ヤクマン","結果発表":"ケッカハッピョウ","発表":"ハッピョウ","結果":"ケッカ","精算":"セイサン","時間":"ジカン","本日":"ホンジツ","今日":"キョウ","一日":"イチニチ","全":"ゼン","お疲れさま":"おつかれさま","最高得点":"サイコウトクテン","得点":"トクテン","一方":"イッポー","次":"ツギ","巻き返し":"まきかえし","大勝利":"ダイショーリ","お見事":"おみごと","平和":"ヘイワ","伝説":"デンセツ","遊び":"あそび","対局":"タイキョク","会い":"あい","出ない":"でない","出ました":"でました"};
 var YKEYS=Object.keys(YOMI).sort((a,b)=>b.length-a.length);
 /* 読み上げ専用：画面の表示は漢字のまま、声に出すときだけかなに置き換える（設定の「言葉=読み」が優先） */
-function yomi(t){var L=(S.settings.yomi||"").split("\n").map(l=>l.split("=")).filter(p=>p.length==2&&p[0].trim()).map(p=>[p[0].trim(),p[1].trim()]).sort((a,b)=>b[0].length-a[0].length);
+function ylines(){return(S.settings.yomi||"").split("\n").map(l=>l.replace(/[「」（）()『』]/g,"").replace(/＝/g,"=").split("=")).filter(p=>p.length==2&&p[0].trim()&&p[1].trim()).map(p=>[p[0].trim(),p[1].trim()])}
+function yomi(t){var L=ylines().sort((a,b)=>b[0].length-a[0].length);
  L.concat(YKEYS.map(k=>[k,YOMI[k]])).forEach(p=>{t=t.split(p[0]).join(p[1])});return t}
 function speak(text){try{var s=window.speechSynthesis;if(!s)return;s.cancel();var u=new SpeechSynthesisUtterance(yomi(text));u.lang="ja-JP";var v=s.getVoices().filter(x=>/^ja/i.test(x.lang))[0];if(v)u.voice=v;u.rate=.95;s.speak(u)}catch(e){}}
 
@@ -321,7 +322,7 @@ function vSet(){
  <label>ポイント端数処理<select data-s="round"><option value="gosha"${s.round=="gosha"?" selected":""}>五捨六入</option><option value="shisha"${s.round=="shisha"?" selected":""}>四捨五入</option></select></label></div>
  <p class="sub">持ち点・返し点は通常の点数（25000など）で入力。1位のポイントは他3人の合計の逆数で自動計算（オカ込み）。変更しても過去の記録は再計算されません。</p></div>
  <div class="card"><h3>機能のオン/オフ</h3><p class="sub">オフにしても記録は消えません。オンに戻すと元どおり表示されます。</p>${FTS.map(x=>`<label class="ft"><input type="checkbox" data-ft="${x[0]}"${s.ft[x[0]]?" checked":""}>${x[1]}</label>`).join("")}</div>
- <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button><p class="sub" id="yT">上の欄に書いた言葉を、読みに直して読み上げます（何も書いていないときは見本を読みます）。</p></div>
+ <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に1つ、「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。かっこは不要で、「＝」も使えます。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button><p class="sub" id="yT">上の欄に書いた言葉を、読みに直して読み上げます（何も書いていないときは見本を読みます）。</p></div>
  <div class="card"><h3>バックアップ</h3><p class="sub">最終: ${S.meta.lastBackup||"なし"}　／　保存先: ${local?"この端末のみ":"Firebase"}</p>
  <button class="btn" data-a="exj">JSONで書き出し（復元用）</button><button class="btn s" data-a="exc">CSVで書き出し（Excel用）</button><button class="btn s" data-a="imp">JSONを読み込み（復元）</button><input type="file" id="fi" accept=".json,application/json" data-imp="1" hidden></div>
  <div class="card"><h3>データ管理</h3><p class="sub">対局の記録とチップ記録をすべて消します（メンバーは残ります）。先にバックアップを取ってください。</p><button class="btn d" data-a="wipe">全記録を削除</button></div>`}
@@ -413,7 +414,7 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
    settle(s).rows.forEach(r=>{C.push([s.sd,'"'+nm(r.id).replace(/"/g,'""')+'"',r.c==null?"":r.c].join(","))})});
   dl("mahjong_"+today()+".csv","\ufeff"+L.concat(C).join("\r\n"),"text/csv");await backed()}
  else if(a=="ytest"){var ta=q('[data-t2="yomi"]');if(ta)S.settings.yomi=ta.value;
-  var ws=(S.settings.yomi||"").split("\n").map(l=>l.split("=")[0].trim()).filter(Boolean),tx=ws.length?ws.join("。"):"半荘と役満の読みテストです。国士無双。大三元。";
+  var ws=ylines().map(p=>p[0]),tx=ws.length?ws.join("。"):"半荘と役満の読みテストです。国士無双。大三元。";
   var yt=document.getElementById("yT");if(yt)yt.textContent="読み上げ："+yomi(tx);speak(tx)}
  else if(a=="cx"){ui.exp=null;render()}
  else if(a=="imp")document.getElementById("fi").click()});
