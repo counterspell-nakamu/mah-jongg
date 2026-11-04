@@ -57,12 +57,12 @@ var PASS=""; // 合言葉（空なら無し）
 /* ======================== */
 var app=document.getElementById("app"),WN=["東","南","西","北"],GAP=8*36e5;
 var YK=["国士無双","国士無双十三面","四暗刻","四暗刻単騎","大三元","小四喜","大四喜","字一色","緑一色","清老頭","九蓮宝燈","純正九蓮宝燈","四槓子","天和","地和","数え役満"];
-var FTS=[["ym","役満の記録（入力画面）"],["hall","役満殿堂"],["show","精算の発表（音楽と読み上げ）"],["hl","精算のハイライト"],["titles","称号"],["graph","成績の推移グラフ"],["rel","対戦相性表"],["mvp","月間・年間MVP／ブービー"],["se","効果音・ファンファーレ"]];
+var FTS=[["ym","役満の記録（入力画面）"],["hall","役満殿堂"],["show","精算の発表（音楽と読み上げ）"],["hl","精算のハイライト"],["titles","称号"],["graph","成績の推移グラフ"],["rel","対戦相性表"],["mvp","月間・年間MVP／ブービー"],["se","効果音・ファンファーレ"],["yk","焼き鳥のカウント"],["memo","メモ（入力・履歴・メモ一覧）"],["gsay","対局ごとの読み上げ"]];
 function boot(){
 if(PASS&&localStorage.getItem("mjp")!==PASS){var pv0=prompt("合言葉を入力してください");if(pv0!==PASS){app.textContent="合言葉が違います。再読み込みしてください。";return}localStorage.setItem("mjp",pv0)}
-var DEF={players:[],games:[],sess:{},settings:{start:25000,ret:30000,uma:[20,10,-10,-20],rate:0,chipRate:0,gr:1,round:"gosha",yomi:"",ft:{ym:true,hall:true,show:true,hl:true,titles:true,graph:true,rel:true,mvp:true,se:true}},meta:{lastBackup:null}};
+var DEF={players:[],games:[],sess:{},settings:{start:25000,ret:30000,uma:[20,10,-10,-20],rate:0,chipRate:0,gr:1,round:"gosha",yomi:"",gsl:"normal",ft:{ym:true,hall:true,show:true,hl:true,titles:true,graph:true,rel:true,mvp:true,se:true,yk:true,memo:true,gsay:true}},meta:{lastBackup:null}};
 var cl=o=>JSON.parse(JSON.stringify(o));
-var S=cl(DEF),ui={tab:"input",sub:"hall",ptype:"all",pval:"",seat:"",sk:"pt",sd:-1,edit:null,dr:null,undo:null,exp:null,sid:null,busy:false,annText:"",annSid:null};
+var S=cl(DEF),ui={tab:"input",sub:"hall",ptype:"all",pval:"",seat:"",sk:"pt",sd:-1,edit:null,dr:null,undo:null,exp:null,sid:null,busy:false,annText:"",annSid:null,me:null,msearch:"",say:""};
 var local=FB.apiKey.indexOf("YOUR")==0,ref=null,dirty=0;
 var oldIOS=(()=>{var m=/(iPad|iPhone).*OS (\d+)_/.exec(navigator.userAgent);return !!m&&+m[2]<13})();
 var q=s=>app.querySelector(s);
@@ -106,7 +106,7 @@ function sessions(){var m={},o=[];S.games.slice().sort(cmpA).forEach(g=>{var s=m
 var lbl=s=>s.sd.slice(0,4)+"/"+sd5(s.sd)+(s.ed!=s.sd?"〜"+sd5(s.ed):"");
 function settle(s){
  var st=S.settings,ch=(S.sess[s.sid]||{}).chips||{},P={},u=st.gr||1,rg=v=>Math.round(v/u)*u;
- s.gs.forEach(g=>g.ps.forEach(x=>{var o=P[x.p]||(P[x.p]={id:x.p,n:0,pt:0});o.n++;o.pt+=x.pt}));
+ s.gs.forEach(g=>g.ps.forEach(x=>{var o=P[x.p]||(P[x.p]={id:x.p,n:0,pt:0,yk:0});o.n++;o.pt+=x.pt;if(x.yk)o.yk++}));
  var ids=Object.keys(P),ent=ids.filter(id=>ch[id]!==undefined&&ch[id]!==""),au=null,sum=0;
  if(ids.length>1&&ent.length==ids.length-1)au=ids.find(id=>ent.indexOf(id)<0);
  ent.forEach(id=>{sum+=+ch[id]||0});
@@ -134,7 +134,7 @@ function bal(){var d=ui.dr,T=S.settings.start*4/100,man=d.rows.filter(r=>r.s!=="
 function newDr(ids,date,fresh){
  if(!fresh&&!ids){try{var sv=JSON.parse(localStorage.getItem("mjd")||"null");if(sv&&sv.rows&&sv.rows.length==4){ui.dr=sv;return}}catch(e){}}
  var l=S.games.slice().sort((a,b)=>b.t-a.t)[0],base=ids||(l?l.ps.map(x=>x.p):plist().slice(0,4).map(p=>p.id));
- ui.dr={date:date||today(),time:nowT(),flip:false,ym:[],rows:[0,1,2,3].map(i=>({p:base[i]||"",s:"",au:false}))}}
+ ui.dr={date:date||today(),time:nowT(),flip:false,ym:[],memo:"",rows:[0,1,2,3].map(i=>({p:base[i]||"",s:"",au:false,yk:false}))}}
 function draft(){if(!ui.dr)newDr();if(!ui.dr.ym)ui.dr.ym=[];return ui.dr}
 function sessInfo(){
  var d=draft(),gs=S.games.filter(g=>g.id!=ui.edit).sort(cmpA),t=ts(d.date,d.time),prev=null;
@@ -164,6 +164,7 @@ function sync(){
  var d=draft();
  d.rows.forEach((r,i)=>{var el=q('[data-f="s'+i+'"]');if(el){if(el!==document.activeElement)el.value=r.s;el.readOnly=!!r.au;el.classList.toggle("auto",!!r.au)}
   var lb=q('[data-lb="'+i+'"]');if(lb){lb.textContent=r.au?"自動":"消す";lb.disabled=!!r.au;lb.classList.toggle("on",!!r.au)}
+  var yb=q('[data-yk="'+i+'"]');if(yb)yb.classList.toggle("on",!!r.yk);
   app.querySelectorAll('[data-i="'+i+'"][data-a="adj"],[data-i="'+i+'"][data-a="neg"]').forEach(b=>{b.disabled=!!r.au})});
  var a=document.getElementById("pv");if(a)a.innerHTML=pvHTML();
  a=document.getElementById("td");if(a)a.innerHTML=tdHTML();
@@ -179,7 +180,7 @@ function vInput(){
  if(S.players.length<4)return'<div class="card">先に「メンバー」タブで4人以上登録してください。</div>';
  var d=draft(),opts='<option value="">選択</option>'+plist().map(p=>`<option value="${p.id}">${esc(p.name)}${p.reg?"":"（控え）"}</option>`).join("");
  var bt=(i,dv,dis)=>`<button class="b" data-a="adj" data-i="${i}" data-d="${dv}"${dis?" disabled":""}>${dv>0?"+":"−"}${Math.abs(dv)}</button>`;
- var h=ui.undo?`<div class="warn ok">保存しました（第${ui.undo.n}戦）<button class="btn d" data-a="undo">今の対局を取り消す</button></div>`:"";
+ var h=ui.undo?`<div class="warn ok">保存しました（第${ui.undo.n}戦）<button class="btn d" data-a="undo">今の対局を取り消す</button>${ui.say?`<div class="sub" style="margin-top:4px">読み上げ：${esc(ui.say)}</div>`:""}</div>`:"";
  h+=`<div class="card"><h3>${ui.edit?"対局を編集":"対局を入力"}</h3><div class="g"><label>日付<input type="date" data-f="date" value="${d.date}"></label><label>時刻<input type="time" data-f="time" value="${d.time||""}"></label></div>
  <div id="si" style="margin-top:8px">${siHTML()}</div>
  <p class="sub" style="margin:6px 0 0">上から東・南・西・北の席。名前は前回の並びを引き継ぎ（↑↓で入れ替え）。素点は100点単位（250＝25,000点）で、入力順は自由。3人入れると残り1人が自動計算されます。</p>
@@ -189,9 +190,9 @@ function vInput(){
   <button class="mv" data-a="mv" data-i="${i}" data-d="-1"${i==0?" disabled":""}>↑</button><button class="mv" data-a="mv" data-i="${i}" data-d="1"${i==3?" disabled":""}>↓</button></div>
   <div class="sr"><button class="lb${au?" on":""}" data-lb="${i}" data-a="clr" data-i="${i}"${au?" disabled":""}>${au?"自動":"消す"}</button>${bt(i,-100,au)}${bt(i,-10,au)}${bt(i,-1,au)}
   <input type="number" data-f="s${i}" placeholder="${S.settings.start/100}" value="${r.s}"${au?' readonly class="auto"':""}>${bt(i,1,au)}${bt(i,10,au)}${bt(i,100,au)}
-  <button class="b" data-a="neg" data-i="${i}"${au?" disabled":""}>±</button></div></div>`});
+  <button class="b" data-a="neg" data-i="${i}"${au?" disabled":""}>±</button></div>${S.settings.ft.yk?`<div style="margin-top:6px"><button class="lb${r.yk?" on":""}" style="min-height:44px;padding:0 14px" data-yk="${i}" data-a="yk" data-i="${i}">焼き鳥（和了なし）</button></div>`:""}</div>`});
  if(S.settings.ft.ym)h+=`<div class="pb"><b>役満が出たら</b>${d.ym.map(ymRow).join("")}<div><button class="btn s" data-a="yadd">＋役満を記録</button></div></div>`;
- h+=`<div id="pv" style="margin:10px 0">${pvHTML()}</div><button class="btn big" data-a="save">${ui.edit?"変更を保存":"保存して次の対局へ"}</button>${ui.edit?'<button class="btn s big" data-a="cancel">キャンセル</button>':""}</div>`;
+ h+=(S.settings.ft.memo?`<textarea data-f="memo" rows="2" style="width:100%;margin-top:8px" placeholder="メモ（任意）例：東2局で○○があった">${esc(d.memo||"")}</textarea>`:"")+`<div id="pv" style="margin:10px 0">${pvHTML()}</div><button class="btn big" data-a="save">${ui.edit?"変更を保存":"保存して次の対局へ"}</button>${ui.edit?'<button class="btn s big" data-a="cancel">キャンセル</button>':""}</div>`;
  return h+`<div class="card" id="td">${tdHTML()}</div>`}
 
 /* ---- 履歴 ---- */
@@ -202,9 +203,9 @@ function vHist(){
   h+=`<div class="card"><div class="pl"><div class="dh">${lbl(s)} <span class="sub">${s.gs.length}戦</span></div><button class="btn s" data-a="tosettle" data-k="${s.sid}">精算</button></div>
   <div class="sub" style="margin-bottom:6px">${Object.keys(P).sort((a,b)=>P[b]-P[a]).map(id=>esc(nm(id))+" "+f(P[id])).join("　")}</div>`;
   s.gs.forEach((g,gi)=>{h+=`<div class="gm"><b>第${gi+1}戦</b> <span class="sub">${g.date.slice(5).replace("-","/")} ${g.time||"時刻なし"}</span>`
-   +g.ps.map((x,i)=>({x:x,i:i})).sort((a,b)=>a.x.rank-b.x.rank).map(z=>`<div class="pl"><span>${z.x.rank}位 <span class="wd">${WN[z.i]}</span> ${esc(nm(z.x.p))} <span class="sub">${z.x.s}</span></span><span>${f(z.x.pt)} pt</span></div>`).join("")
+   +g.ps.map((x,i)=>({x:x,i:i})).sort((a,b)=>a.x.rank-b.x.rank).map(z=>`<div class="pl"><span>${z.x.rank}位 <span class="wd">${WN[z.i]}</span> ${esc(nm(z.x.p))}${z.x.yk?' <span class="wd" style="background:var(--neg)">鳥</span>':""} <span class="sub">${z.x.s}</span></span><span>${f(z.x.pt)} pt</span></div>`).join("")
    +((ft.ym||ft.hall)&&g.ym?g.ym.map(y=>`<div class="warn">役満　${esc(nm(y.w))}　${esc(y.k)}（${y.t}${y.f?"・放銃 "+esc(nm(y.f)):""}）</div>`).join(""):"")
-   +`<button class="btn s" data-a="edit" data-k="${g.id}">編集</button><button class="btn d" data-a="del" data-k="${g.id}">削除</button>`
+   +(ft.memo?(ui.me==g.id?`<textarea data-me="1" rows="3" style="width:100%">${esc(g.memo||"")}</textarea><button class="btn" data-a="msave" data-k="${g.id}">メモを保存</button><button class="btn s" data-a="mcancel">やめる</button>`:(g.memo?`<div class="warn" style="white-space:pre-wrap">メモ：${esc(g.memo)}</div>`:"")+`<button class="btn s" data-a="memo" data-k="${g.id}">メモ</button>`):"")+`<button class="btn s" data-a="edit" data-k="${g.id}">編集</button><button class="btn d" data-a="del" data-k="${g.id}">削除</button>`
    +(gi>0?`<button class="btn s" data-a="split" data-k="${g.id}">ここから新しい会</button>`:(si>0?`<button class="btn s" data-a="mergeS" data-k="${g.id}">前の会にまとめる</button>`:""))+`</div>`});
   h+="</div>"});
  return h}
@@ -226,15 +227,45 @@ function announce(s){
  if(b)t.push("最高得点は"+nm(b.p)+"さんの"+b.s+"点でした。");
  t.push(ym.length?"本日は役満が"+ym.length+"回出ました。"+ym.map(y=>nm(y.w)+"さんの"+y.k).join("、")+"。"+pick(["伝説の一日です。","すばらしい。"]):pick(["役満の出ない平和な一日でした。","今日は役満はありませんでした。"]));
  t.push(pick(["それでは、また次の対局でお会いしましょう。","また遊びましょう。"]));return t.join("")}
+function gameSay(g){
+ var st=S.settings,gs=S.games.filter(x=>x.sid==g.sid).sort(cmpA),n=gs.findIndex(x=>x.id==g.id)+1,prev=gs.slice(0,n-1),cur=gs.slice(0,n);
+ var ps=g.ps.slice().sort((a,b)=>a.rank-b.rank),top=ps[0],last=ps[3],sp=v=>(v>=0?"プラス":"マイナス")+Math.abs(v)+"ポイント";
+ var base=pick(["第"+n+"戦の結果です。","第"+n+"戦、終了です。"])+"トップは"+nm(top.p)+"さん、"+sp(top.pt)+"。ラスは"+nm(last.p)+"さんです。";
+ if(st.gsl=="short")return base;
+ var C=[],add=(pr,t)=>C.push({pr:pr,t:t});
+ var cum=l=>{var m={};l.forEach(x=>x.ps.forEach(y=>{m[y.p]=(m[y.p]||0)+y.pt}));return m};
+ var run=(p,test,list)=>{var c=0;for(var i=list.length-1;i>=0;i--){var x=list[i].ps.find(y=>y.p==p);if(!x)continue;if(test(x))c++;else break}return c};
+ (g.ym||[]).forEach(y=>add(0,nm(y.w)+"さん、役満、"+y.k+"です！"));
+ var ct=run(top.p,x=>x.rank==1,cur);if(ct>=2)add(1,nm(top.p)+"さん、"+ct+"連続トップです。"+(ct>=3?pick(["止まりません。","強い。"]):""));
+ var cl=run(last.p,x=>x.rank==4,cur);if(cl>=2)add(1,nm(last.p)+"さん、"+cl+"連続ラスです。"+pick(["ドンマイです。","そろそろ流れが変わります。"]));
+ if(n>1){
+  if(!prev.some(x=>x.ps.some(y=>y.p==top.p&&y.rank==1)))add(2,nm(top.p)+"さん、今日初トップです。");
+  if(!prev.some(x=>x.ps.some(y=>y.p==last.p&&y.rank==4)))add(5,nm(last.p)+"さん、今日初のラスです。");
+  var cb=cum(prev),ca=cum(cur),lead=m=>Object.keys(m).sort((a,b)=>m[b]-m[a])[0];
+  if(lead(cb)!==lead(ca))add(2,"累計トップが"+nm(lead(ca))+"さんに入れ替わりました。");
+  g.ps.forEach(x=>{if((cb[x.p]||0)<=0&&ca[x.p]>0){var pos=false,sum=0;prev.forEach(z=>{var y=z.ps.find(w=>w.p==x.p);if(y){sum+=y.pt;if(sum>0)pos=true}});if(!pos)add(4,nm(x.p)+"さん、今日初めてプラスになりました。")}});
+  var pg=prev[prev.length-1].ps.find(y=>y.p==top.p);if(pg&&pg.rank==4)add(3,"前の対局のラスから、"+nm(top.p)+"さんが見事トップです。");
+ }
+ g.ps.forEach(x=>{if(x.s<0)add(2,nm(x.p)+"さん、箱割れです。")});
+ if(ps[0].s-ps[1].s<=1000)add(4,"1位と2位が1000点以内、僅差の勝負でした。");
+ else if(ps.some((x,i)=>i&&x.s==ps[i-1].s))add(6,"同点がありました。");
+ var all=S.games.filter(x=>x.id!=g.id&&cmpA(x,g)<0),mx=-1e9;all.forEach(x=>x.ps.forEach(y=>{if(y.s>mx)mx=y.s}));
+ if(all.length&&top.s>mx)add(3,"全体の最高得点を更新しました。");
+ if(st.ft.yk){var yk=g.ps.filter(x=>x.yk);if(yk.length)add(4,"焼き鳥は"+yk.map(x=>nm(x.p)+"さん").join("と")+"です。"+(yk.some(x=>x.p==last.p)?"しかもラスです。":""))}
+ if(top.pt>=40)add(6,"大勝ちです。");if(last.pt<=-40)add(6,"大きく沈みました。");
+ if(g.ps[0].rank==1)add(7,"東家の勝ちです。");
+ var tt=0;S.games.filter(x=>cmpA(x,g)<=0).forEach(x=>x.ps.forEach(y=>{if(y.p==top.p&&y.rank==1)tt++}));if(tt>=10&&tt%10==0)add(3,nm(top.p)+"さん、通算"+tt+"回目のトップです。");
+ C.sort((a,b)=>a.pr-b.pr);
+ return base+C.slice(0,2).map(c=>c.t).join("")}
 function vSettle(){
  var ss=sessions();if(!ss.length)return'<div class="card">まだ記録がありません。</div>';
  var s=ss.find(x=>x.sid==ui.sid)||ss[0],st=S.settings;ui.sid=s.sid;var r=settle(s),tot=0;
  var h=`<div class="card"><label class="sub">会<select data-g="sid">${ss.map(x=>`<option value="${x.sid}"${x.sid==s.sid?" selected":""}>${lbl(x)}（${x.gs.length}戦）</option>`).join("")}</select></label>`;
  if(!st.rate&&!st.chipRate)h+='<p class="warn">設定タブで「1pt＝何G」「チップ1枚＝何G」を入れると、ゴールドが計算されます。</p>';
- h+='<p class="sub">チップは会の終わりに枚数を入れます。1人を除いて入れると、残り1人は合計0になるよう自動で入ります。</p><div class="tw"><table><tr><th>名前</th><th>半荘</th><th>順位pt</th><th>ポイント分</th><th>チップ枚数</th><th>チップ分</th><th>合計</th></tr>';
+ h+='<p class="sub">チップは会の終わりに枚数を入れます。1人を除いて入れると、残り1人は合計0になるよう自動で入ります。</p><div class="tw"><table><tr><th>名前</th><th>半荘</th>'+(st.ft.yk?"<th>焼き鳥</th>":"")+'<th>順位pt</th><th>ポイント分</th><th>チップ枚数</th><th>チップ分</th><th>合計</th></tr>';
  r.rows.forEach(o=>{tot+=o.tg;var id=o.id,dis=o.au?" disabled":"";
-  h+=`<tr><td>${esc(nm(id))}</td><td>${o.n}</td><td>${f(o.pt)}</td><td>${fg(o.pg)}</td><td><div class="cc"><button class="b" data-a="cadj" data-id="${id}" data-d="-1"${dis}>−1</button><input type="number" data-c="${id}" placeholder="0" value="${o.c==null?"":o.c}"${o.au?' readonly class="auto"':""}><button class="b" data-a="cadj" data-id="${id}" data-d="1"${dis}>+1</button><button class="b" data-a="cclr" data-id="${id}"${dis}>消</button></div></td><td>${fg(o.cg)}</td><td><b>${fg(o.tg)}</b></td></tr>`});
- h+=`<tr><td>合計</td><td></td><td></td><td></td><td>${r.full?f(r.sum):""}</td><td></td><td>${fg(tot)}</td></tr></table></div>`;
+  h+=`<tr><td>${esc(nm(id))}</td><td>${o.n}</td>${st.ft.yk?`<td>${o.yk}</td>`:""}<td>${f(o.pt)}</td><td>${fg(o.pg)}</td><td><div class="cc"><button class="b" data-a="cadj" data-id="${id}" data-d="-1"${dis}>−1</button><input type="number" data-c="${id}" placeholder="0" value="${o.c==null?"":o.c}"${o.au?' readonly class="auto"':""}><button class="b" data-a="cadj" data-id="${id}" data-d="1"${dis}>+1</button><button class="b" data-a="cclr" data-id="${id}"${dis}>消</button></div></td><td>${fg(o.cg)}</td><td><b>${fg(o.tg)}</b></td></tr>`});
+ h+=`<tr><td>合計</td><td></td>${st.ft.yk?"<td></td>":""}<td></td><td></td><td>${r.full?f(r.sum):""}</td><td></td><td>${fg(tot)}</td></tr></table></div>`;
  if(r.full&&r.sum!=0)h+=`<p class="warn">チップの合計が${r.sum}枚です（本来0）</p>`;
  if(st.gr>1&&(st.rate||st.chipRate))h+=`<p class="sub">金額は${st.gr}G単位に丸めているため、合計が0にならないことがあります。</p>`;
  h+="</div>";
@@ -248,13 +279,13 @@ function vStat(){
  P.sel.forEach(s=>{ng+=s.gs.length;
   s.gs.forEach(g=>g.ps.forEach((x,i)=>{var z=sm[i];z.n++;z.rk+=x.rank;z.v+=x.pt;if(x.rank==1)z.t++;if(x.rank==4)z.l++;
    if(sf&&String(i)!==ui.seat)return;
-   var o=m[x.p]||(m[x.p]={n:0,pt:0,chip:0,tg:0,rk:0,t:0,l:0});o.n++;o.pt+=x.pt;o.rk+=x.rank;if(x.rank==1)o.t++;if(x.rank==4)o.l++}));
+   var o=m[x.p]||(m[x.p]={n:0,pt:0,chip:0,tg:0,rk:0,t:0,l:0,yk:0});o.n++;o.pt+=x.pt;if(x.yk)o.yk++;o.rk+=x.rank;if(x.rank==1)o.t++;if(x.rank==4)o.l++}));
   settle(s).rows.forEach(r=>{var o=m[r.id];if(o){o.chip+=r.c||0;o.tg+=r.tg}})});
  var gd=S.settings.rate>0||S.settings.chipRate>0;
- var rows=Object.keys(m).map(id=>{var o=m[id];return{name:nm(id),n:o.n,pt:o.pt,chip:o.chip,tg:o.tg,avg:o.rk/o.n,top:o.t/o.n,last:o.l/o.n}});
+ var rows=Object.keys(m).map(id=>{var o=m[id];return{name:nm(id),n:o.n,pt:o.pt,chip:o.chip,tg:o.tg,avg:o.rk/o.n,top:o.t/o.n,last:o.l/o.n,yk:o.yk,ykr:o.yk/o.n}});
  var sr=rows.slice().sort((a,b)=>(gd?b.tg-a.tg:0)||b.pt-a.pt);
  rows.sort((a,b)=>ui.sk=="name"?ui.sd*a.name.localeCompare(b.name,"ja"):ui.sd*(a[ui.sk]-b[ui.sk]));
- var cols=[["name","名前"],["n","半荘"],["pt","順位pt"],["chip","チップ"]].concat(gd?[["tg","総合G"]]:[],[["avg","平均順位"],["top","トップ率"],["last","ラス率"]]);
+ var cols=[["name","名前"],["n","半荘"],["pt","順位pt"],["chip","チップ"]].concat(gd?[["tg","総合G"]]:[],[["avg","平均順位"],["top","トップ率"],["last","ラス率"]],S.settings.ft.yk?[["yk","焼き鳥"],["ykr","焼き鳥率"]]:[]);
  var mark=k=>ui.sk==k?(ui.sd>0?" ▲":" ▼"):"";
  var mv="";
  if(S.settings.ft.mvp&&ui.ptype!="all"&&!sf&&sr.length>=2){var sh=r=>gd?fg(r.tg):f(r.pt)+" pt";
@@ -262,7 +293,7 @@ function vStat(){
  return`<div class="card"><div class="g g3">${perHTML(P)}<label>席<select data-g="seat"><option value="">全席</option>${WN.map((w,i)=>`<option value="${i}"${ui.seat===String(i)?" selected":""}>${w}家</option>`).join("")}</select></label></div>
  <p class="sub">列の見出しをタップで並べ替え（${ng}半荘${sf?"・"+WN[+ui.seat]+"家のときの成績。チップ・Gは非表示":""}／会の開始日で期間を振り分け）</p>
  <div class="tw"><table><tr>${cols.map(c=>`<th data-a="sort" data-k="${c[0]}">${c[1]}${mark(c[0])}</th>`).join("")}</tr>
- ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.n}</td><td>${f(r.pt)}</td><td>${sf?"－":f(r.chip)}</td>${gd?`<td><b>${sf?"－":fg(r.tg)}</b></td>`:""}<td>${r.avg.toFixed(2)}</td><td>${pc(r.top)}</td><td>${pc(r.last)}</td></tr>`).join("")||'<tr><td colspan="9">この期間の記録はありません</td></tr>'}</table></div></div>${mv}
+ ${rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.n}</td><td>${f(r.pt)}</td><td>${sf?"－":f(r.chip)}</td>${gd?`<td><b>${sf?"－":fg(r.tg)}</b></td>`:""}<td>${r.avg.toFixed(2)}</td><td>${pc(r.top)}</td><td>${pc(r.last)}</td>${S.settings.ft.yk?`<td>${r.yk}</td><td>${pc(r.ykr)}</td>`:""}</tr>`).join("")||'<tr><td colspan="9">この期間の記録はありません</td></tr>'}</table></div></div>${mv}
  <div class="card"><h3>席別成績（全員合計）</h3><div class="tw"><table><tr><th>席</th><th>回数</th><th>平均順位</th><th>トップ率</th><th>ラス率</th><th>平均pt</th></tr>
  ${sm.map((z,i)=>`<tr><td>${WN[i]}家</td><td>${z.n}</td><td>${z.n?(z.rk/z.n).toFixed(2):"-"}</td><td>${z.n?pc(z.t/z.n):"-"}</td><td>${z.n?pc(z.l/z.n):"-"}</td><td>${z.n?f(z.v/z.n):"-"}</td></tr>`).join("")}</table></div></div>`}
 
@@ -275,7 +306,7 @@ function hallHTML(gs){
  ${L.reverse().map(z=>`<tr><td>${z.g.date}</td><td>${esc(nm(z.y.w))}</td><td>${esc(z.y.k)}</td><td>${z.y.t}</td><td>${z.y.f?esc(nm(z.y.f)):"－"}</td></tr>`).join("")}</table></div>`}
 function titlesHTML(gs){
  var M={};
- gs.forEach(g=>g.ps.forEach(x=>{var o=M[x.p]||(M[x.p]={n:0,rk:0,mt:0,ma:0,ct:0,ca:0,bs:-1e9,bd:"",bp:-1e9,wp:1e9,ym:0});o.n++;o.rk+=x.rank;
+ gs.forEach(g=>g.ps.forEach(x=>{var o=M[x.p]||(M[x.p]={n:0,rk:0,mt:0,ma:0,ct:0,ca:0,bs:-1e9,bd:"",bp:-1e9,wp:1e9,ym:0,yk:0});o.n++;o.rk+=x.rank;if(x.yk)o.yk++;
   if(x.rank==1){o.ct++;if(o.ct>o.mt)o.mt=o.ct}else o.ct=0;
   if(x.rank<4){o.ca++;if(o.ca>o.ma)o.ma=o.ca}else o.ca=0;
   if(x.s>o.bs){o.bs=x.s;o.bd=g.date}if(x.pt>o.bp)o.bp=x.pt;if(x.pt<o.wp)o.wp=x.pt}));
@@ -284,7 +315,7 @@ function titlesHTML(gs){
  var best=(key,ok,dir)=>{var b=null;ids.forEach(id=>{var o=M[id];if(!ok(o))return;var v=key(o);if(!b||(dir>0?v>b.v:v<b.v))b={id:id,v:v}});return b};
  var T=[["連勝王",best(o=>o.mt,o=>o.mt>=2,1),b=>b.v+"連続トップ"],["ラス回避王",best(o=>o.ma,o=>o.ma>=5,1),b=>b.v+"戦連続でラスなし"],
   ["最高得点",best(o=>o.bs,o=>o.n>0,1),b=>b.v+"点（"+M[b.id].bd+"）"],["大勝ち（1戦）",best(o=>o.bp,o=>o.n>0,1),b=>"+"+b.v+" pt"],["大沈み（1戦）",best(o=>o.wp,o=>o.n>0,-1),b=>b.v+" pt"],
-  ["役満王",best(o=>o.ym,o=>o.ym>0,1),b=>b.v+"回"],["安定王",best(o=>o.rk/o.n,o=>o.n>=5,-1),b=>"平均"+b.v.toFixed(2)+"位"],["皆勤賞",best(o=>o.n,o=>o.n>0,1),b=>b.v+"戦"]];
+  ["役満王",best(o=>o.ym,o=>o.ym>0,1),b=>b.v+"回"],["安定王",best(o=>o.rk/o.n,o=>o.n>=5,-1),b=>"平均"+b.v.toFixed(2)+"位"],["皆勤賞",best(o=>o.n,o=>o.n>0,1),b=>b.v+"戦"]].concat(S.settings.ft.yk?[["焼き鳥王",best(o=>o.yk,o=>o.yk>0,1),b=>b.v+"回"]]:[]);
  return'<div class="g">'+T.filter(t=>t[1]).map(t=>`<div class="tt"><div class="sub">${t[0]}</div><b>${esc(nm(t[1].id))}</b><div>${t[2](t[1])}</div></div>`).join("")+'</div><p class="sub" style="margin-top:8px">連勝王は2連続以上、ラス回避王は5戦以上、安定王は5戦以上の人が対象です。</p>'}
 function graphHTML(gs){
  if(gs.length<2)return'<p class="sub">2戦以上の記録があると表示されます。</p>';
@@ -303,13 +334,16 @@ function relHTML(gs){
  var L=Object.keys(ids);if(L.length<2)return'<p class="sub">この期間の記録がありません。</p>';
  return`<p class="sub">行の人が、列の人と同卓したときの平均順位（回数）。2.5より小さいほど好成績です。</p><div class="tw"><table><tr><th></th>${L.map(id=>`<th>${esc(nm(id))}</th>`).join("")}</tr>
  ${L.map(a=>`<tr><td>${esc(nm(a))}</td>${L.map(b=>{var o=(R[a]||{})[b];return o?`<td class="${o.rk/o.n<2.4?"pos":o.rk/o.n>2.6?"neg":""}">${(o.rk/o.n).toFixed(2)} <span class="sub">(${o.n})</span></td>`:"<td>－</td>"}).join("")}</tr>`).join("")}</table></div>`}
+function memoList(){var gs=pgames(periodInfo()).filter(g=>g.memo&&(!ui.msearch||g.memo.indexOf(ui.msearch)>=0)).reverse();
+ return gs.length?gs.map(g=>{var tp=g.ps.slice().sort((a,b)=>a.rank-b.rank)[0];return`<div class="gm"><b>${g.date}</b> <span class="sub">${g.time||""}　1位 ${esc(nm(tp.p))}</span><div style="white-space:pre-wrap">${esc(g.memo)}</div></div>`}).join(""):'<p class="sub">該当するメモはありません。</p>'}
+function memoHTML(){return`<input type="search" data-ms="1" placeholder="メモを検索" value="${esc(ui.msearch)}"><div id="ml" style="margin-top:8px">${memoList()}</div>`}
 function vMore(){
- var ft=S.settings.ft,subs=[["hall","役満殿堂"],["titles","称号"],["graph","推移"],["rel","相性"]].filter(x=>ft[x[0]]);
+ var ft=S.settings.ft,subs=[["hall","役満殿堂"],["titles","称号"],["graph","推移"],["rel","相性"],["memo","メモ"]].filter(x=>ft[x[0]]);
  if(!subs.length)return'<div class="card">機能がすべてオフです。設定タブでオンにできます。</div>';
  if(!subs.some(x=>x[0]==ui.sub))ui.sub=subs[0][0];
  var P=periodInfo(),gs=pgames(P);
  return`<div class="card"><div style="display:flex;margin-bottom:8px">${subs.map(x=>`<button class="btn${ui.sub==x[0]?"":" s"}" data-a="sub" data-k="${x[0]}">${x[1]}</button>`).join("")}</div><div class="g">${perHTML(P)}</div></div>
- <div class="card">${({hall:hallHTML,titles:titlesHTML,graph:graphHTML,rel:relHTML})[ui.sub](gs)}</div>`}
+ <div class="card">${({hall:hallHTML,titles:titlesHTML,graph:graphHTML,rel:relHTML,memo:memoHTML})[ui.sub](gs)}</div>`}
 
 function vMem(){
  return`<div class="card"><h3>メンバー</h3>${plist().map(p=>`<div class="pl" style="padding:6px 0"><span>${esc(p.name)} <span class="sub">${p.reg?"レギュラー":"控え"}</span></span><span><button class="btn s" data-a="ren" data-k="${p.id}">名前変更</button><button class="btn s" data-a="reg" data-k="${p.id}">${p.reg?"控えにする":"レギュラーにする"}</button></span></div>`).join("")||'<p class="sub">まだ登録がありません</p>'}
@@ -319,7 +353,8 @@ function vSet(){
  return(ui.exp?`<div class="card"><h3>書き出しデータ</h3><p class="sub">この端末では保存できないため、下の文字を全選択してコピーし、メモなどに貼り付けて保存してください（PCのブラウザから書き出すのが確実です）。</p><textarea readonly rows="8" style="width:100%" onfocus="this.select()">${esc(ui.exp)}</textarea><button class="btn s" data-a="cx">閉じる</button></div>`:"")
  +`<div class="card"><h3>ルール設定</h3><div class="g">${n("start","持ち点",s.start)}${n("ret","返し点",s.ret)}${n("u1","ウマ 2位",s.uma[1])}${n("u2","ウマ 3位",s.uma[2])}${n("u3","ウマ 4位",s.uma[3])}${n("rate","1pt＝何G",s.rate)}${n("chipRate","チップ1枚＝何G",s.chipRate)}
  <label>G端数の丸め<select data-s="gr"><option value="1"${s.gr==1?" selected":""}>丸めない</option><option value="10"${s.gr==10?" selected":""}>10G単位</option><option value="100"${s.gr==100?" selected":""}>100G単位</option></select></label>
- <label>ポイント端数処理<select data-s="round"><option value="gosha"${s.round=="gosha"?" selected":""}>五捨六入</option><option value="shisha"${s.round=="shisha"?" selected":""}>四捨五入</option></select></label></div>
+ <label>ポイント端数処理<select data-s="round"><option value="gosha"${s.round=="gosha"?" selected":""}>五捨六入</option><option value="shisha"${s.round=="shisha"?" selected":""}>四捨五入</option></select></label>
+ <label>対局ごとの読み上げ<select data-s="gsl"><option value="normal"${s.gsl!="short"?" selected":""}>普通（話題つき）</option><option value="short"${s.gsl=="short"?" selected":""}>短い（結果のみ）</option></select></label></div>
  <p class="sub">持ち点・返し点は通常の点数（25000など）で入力。1位のポイントは他3人の合計の逆数で自動計算（オカ込み）。変更しても過去の記録は再計算されません。</p></div>
  <div class="card"><h3>機能のオン/オフ</h3><p class="sub">オフにしても記録は消えません。オンに戻すと元どおり表示されます。</p>${FTS.map(x=>`<label class="ft"><input type="checkbox" data-ft="${x[0]}"${s.ft[x[0]]?" checked":""}>${x[1]}</label>`).join("")}</div>
  <div class="card"><h3>読み上げの読み方</h3><p class="sub">発表の読み上げで、読み間違える言葉を直せます。1行に1つ、「言葉=読み」の形で書きます（例: 半荘=ハンチャン）。かっこは不要で、「＝」も使えます。入れた内容が優先されます。</p><textarea data-t2="yomi" rows="4" style="width:100%" placeholder="言葉=読み">${esc(s.yomi||"")}</textarea><button class="btn s" data-a="ytest">読み上げテスト</button><p class="sub" id="yT">上の欄に書いた言葉を、読みに直して読み上げます（何も書いていないときは見本を読みます）。</p></div>
@@ -328,7 +363,7 @@ function vSet(){
  <div class="card"><h3>データ管理</h3><p class="sub">対局の記録とチップ記録をすべて消します（メンバーは残ります）。先にバックアップを取ってください。</p><button class="btn d" data-a="wipe">全記録を削除</button></div>`}
 
 function render(){
- var ft=S.settings.ft,more=ft.hall||ft.titles||ft.graph||ft.rel;
+ var ft=S.settings.ft,more=ft.hall||ft.titles||ft.graph||ft.rel||ft.memo;
  if(ui.tab=="more"&&!more)ui.tab="input";
  var tabs=[["input","入力"],["hist","履歴"],["settle","精算"],["stat","集計"]].concat(more?[["more","ほか"]]:[],[["mem","メンバー"],["set","設定"]]);
  var h='<nav>'+tabs.map(t=>`<button data-a="tab" data-k="${t[0]}" class="${ui.tab==t[0]?"on":""}">${t[1]}</button>`).join("")+'</nav>';
@@ -347,12 +382,12 @@ var so=sid=>S.sess[sid]||(S.sess[sid]={chips:{}});
 function cleanSess(){var ok={};S.games.forEach(g=>{ok[g.sid]=1});Object.keys(S.sess).forEach(k=>{if(!ok[k])delete S.sess[k]})}
 
 /* ---- イベント ---- */
-app.addEventListener("input",e=>{var k=e.target.dataset.f;if(!k)return;var d=draft(),v=e.target.value;
- if(k=="date"||k=="time")d[k]=v;
+app.addEventListener("input",e=>{if(e.target.dataset.ms!==undefined){ui.msearch=e.target.value;var ml=document.getElementById("ml");if(ml)ml.innerHTML=memoList();return}var k=e.target.dataset.f;if(!k)return;var d=draft(),v=e.target.value;
+ if(k=="date"||k=="time"||k=="memo")d[k]=v;
  else{var r=d.rows[+k[1]];if(k[0]=="p")r.p=v;else{r.s=v;r.au=false;bal()}}
  sync()});
 app.addEventListener("change",e=>{var t=e.target,d=t.dataset;
- if(d.s){var k=d.s;if(k[0]=="u"&&k.length==2)S.settings.uma[+k[1]]=+t.value;else S.settings[k]=k=="round"?t.value:+t.value;save()}
+ if(d.s){var k=d.s;if(k[0]=="u"&&k.length==2)S.settings.uma[+k[1]]=+t.value;else S.settings[k]=k=="round"||k=="gsl"?t.value:+t.value;save()}
  if(d.ft){S.settings.ft[d.ft]=t.checked;save()}
  if(d.t2!==undefined){S.settings[d.t2]=t.value;save(true)}
  if(d.g){ui[d.g]=t.value;if(d.g=="ptype")ui.pval="";render()}
@@ -368,6 +403,10 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
  else if(a=="clr"){var r3=draft().rows[i];r3.s="";r3.au=false;bal();sync()}
  else if(a=="flip"){var d0=draft();d0.flip=!d0.flip;sync()}
  else if(a=="yadd"){draft().ym.push({w:0,k:YK[0],t:"ロン",f:""});render()}
+ else if(a=="yk"){var ry=draft().rows[i];ry.yk=!ry.yk;sync()}
+ else if(a=="memo"){ui.me=k;render()}
+ else if(a=="mcancel"){ui.me=null;render()}
+ else if(a=="msave"){var mt=q('[data-me="1"]'),gm=S.games.find(x=>x.id==k);if(gm)gm.memo=mt?mt.value.trim():"";ui.me=null;await save()}
  else if(a=="ydel"){draft().ym.splice(i,1);render()}
  else if(a=="mv"){var rs=draft().rows,j=i+ +b.dataset.d,t=rs[i].p;rs[i].p=rs[j].p;rs[j].p=t;render()}
  else if(a=="shuf"){var rs2=draft().rows,ps=rs2.map(x=>x.p);for(var n=ps.length-1;n>0;n--){var m=Math.floor(Math.random()*(n+1)),tmp=ps[n];ps[n]=ps[m];ps[m]=tmp}rs2.forEach((x,z)=>{x.p=ps[z]});render()}
@@ -382,18 +421,18 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
   if(ss!=T&&!confirm("素点の合計が"+ss+"です（本来"+T+"）。このまま保存しますか？"))return;
   ui.busy=true;
   var old=S.games.find(g=>g.id==ui.edit),si=sessInfo();
-  var g={id:ui.edit||Date.now().toString(36),t:old?old.t:Date.now(),date:d2.date,time:d2.time||"",sid:old?old.sid:(si.sid||"s"+Date.now().toString(36)),ps:d2.rows.map((x,z)=>Object.assign({p:x.p,s:Math.round(+x.s*100)},res[z])),
+  var g={id:ui.edit||Date.now().toString(36),t:old?old.t:Date.now(),date:d2.date,time:d2.time||"",sid:old?old.sid:(si.sid||"s"+Date.now().toString(36)),ps:d2.rows.map((x,z)=>Object.assign({p:x.p,s:Math.round(+x.s*100),yk:!!x.yk},res[z])),memo:(d2.memo||"").trim(),
    ym:d2.ym.map(y=>({w:d2.rows[y.w].p,k:y.k,t:y.t,f:y.t=="ロン"&&y.f!==""?d2.rows[y.f].p:""}))};
   S.games=S.games.filter(x=>x.id!=g.id).concat(g);
-  play(g.ym.length?FAN:BLIP);
+  play(g.ym.length?FAN:BLIP);ui.say="";if(!ui.edit&&S.settings.ft.gsay){ui.say=gameSay(g);speak(ui.say)}
   try{localStorage.removeItem("mjd")}catch(er){}
   if(ui.edit){ui.edit=null;ui.undo=null;ui.dr=null;ui.tab="hist"}
   else{ui.undo={id:g.id,n:si.n};var ids=d2.rows.map(x=>x.p);ui.dr=null;newDr(ids,d2.date,true)}
   window.scrollTo(0,0);await save();ui.busy=false}
- else if(a=="undo"){if(confirm("今保存した対局を取り消しますか？")){S.games=S.games.filter(x=>x.id!=ui.undo.id);ui.undo=null;cleanSess();await save()}}
+ else if(a=="undo"){if(confirm("今保存した対局を取り消しますか？")){try{window.speechSynthesis.cancel()}catch(er){}ui.say="";S.games=S.games.filter(x=>x.id!=ui.undo.id);ui.undo=null;cleanSess();await save()}}
  else if(a=="cancel"){ui.edit=null;ui.dr=null;newDr();render()}
  else if(a=="edit"){var g2=S.games.find(x=>x.id==k),ix=p=>g2.ps.findIndex(x=>x.p==p);
-  ui.dr={date:g2.date,time:g2.time||"",flip:false,rows:g2.ps.map(x=>({p:x.p,s:String(x.s/100),au:false})),ym:(g2.ym||[]).map(y=>({w:ix(y.w),k:y.k,t:y.t,f:y.f?ix(y.f):""}))};ui.edit=k;ui.undo=null;ui.tab="input";render()}
+  ui.dr={date:g2.date,time:g2.time||"",flip:false,memo:g2.memo||"",rows:g2.ps.map(x=>({p:x.p,s:String(x.s/100),au:false,yk:!!x.yk})),ym:(g2.ym||[]).map(y=>({w:ix(y.w),k:y.k,t:y.t,f:y.f?ix(y.f):""}))};ui.edit=k;ui.undo=null;ui.tab="input";render()}
  else if(a=="del"){if(confirm("この対局を削除しますか？")){S.games=S.games.filter(x=>x.id!=k);cleanSess();await save()}}
  else if(a=="split"){var g3=S.games.find(x=>x.id==k);if(confirm("この対局以降を、新しい会として分けますか？")){var ns="s"+Date.now().toString(36);S.games.forEach(x=>{if(x.sid==g3.sid&&cmpA(x,g3)>=0)x.sid=ns});await save()}}
  else if(a=="mergeS"){var g4=S.games.find(x=>x.id==k),asc=sessions().reverse(),ix2=asc.findIndex(s=>s.sid==g4.sid);
@@ -409,8 +448,8 @@ app.addEventListener("click",async e=>{var b=e.target.closest("[data-a]");if(!b|
  else if(a=="reg"){var p2=S.players.find(x=>x.id==k);p2.reg=!p2.reg;await save()}
  else if(a=="wipe"){if(confirm("全ての対局記録とチップ記録を削除します。よろしいですか？")&&confirm("本当に削除しますか？（元に戻せません）")){S.games=[];S.sess={};ui.undo=null;ui.dr=null;try{localStorage.removeItem("mjd")}catch(er){}await save()}}
  else if(a=="exj"){dl("mahjong_"+today()+".json",JSON.stringify(S,null,1),"application/json");await backed()}
- else if(a=="exc"){var L=["日付,時刻,会,対局,席,名前,順位,素点,順位pt,役満"],ss2=sessions().reverse(),C=["","会の開始日,名前,チップ枚数"];
-  ss2.forEach(s=>{s.gs.forEach((g,gi)=>g.ps.forEach((x,z)=>{L.push([g.date,g.time||"",s.sd,gi+1,WN[z],'"'+nm(x.p).replace(/"/g,'""')+'"',x.rank,x.s,x.pt,'"'+(g.ym||[]).filter(y=>y.w==x.p).map(y=>y.k).join("/")+'"'].join(","))}));
+ else if(a=="exc"){var L=["日付,時刻,会,対局,席,名前,順位,素点,順位pt,役満,焼き鳥,メモ"],ss2=sessions().reverse(),C=["","会の開始日,名前,チップ枚数"];
+  ss2.forEach(s=>{s.gs.forEach((g,gi)=>g.ps.forEach((x,z)=>{L.push([g.date,g.time||"",s.sd,gi+1,WN[z],'"'+nm(x.p).replace(/"/g,'""')+'"',x.rank,x.s,x.pt,'"'+(g.ym||[]).filter(y=>y.w==x.p).map(y=>y.k).join("/")+'"',x.yk?"1":"",'"'+(z==0?(g.memo||"").replace(/"/g,'""'):"")+'"'].join(","))}));
    settle(s).rows.forEach(r=>{C.push([s.sd,'"'+nm(r.id).replace(/"/g,'""')+'"',r.c==null?"":r.c].join(","))})});
   dl("mahjong_"+today()+".csv","\ufeff"+L.concat(C).join("\r\n"),"text/csv");await backed()}
  else if(a=="ytest"){var ta=q('[data-t2="yomi"]');if(ta)S.settings.yomi=ta.value;
